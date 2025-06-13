@@ -1,0 +1,9 @@
+﻿MSSV,AnswerTable,StudentTable,Cosine,EnoughCols,PK_OK,FK_OK,Status
+16001111,ChiTietMuaHang,ChiTietMuaHang,1.0,True,True,True,ĐỦ
+16001111,ChiTietTraTien,ChiTietTraTien,1.0000001,True,True,True,ĐỦ
+16001111,HangHoa,HangHoa,0.9999999,True,True,True,ĐỦ
+16001111,LoaiTien,LoaiTien,1.0000002,True,True,True,ĐỦ
+16001111,MuaHang,MuaHang,1.0,True,True,True,ĐỦ
+16001111,NhaCungCap,NhaCungCap,0.9999999,True,True,True,ĐỦ
+16001111,NhanVien,NhanVien,1.0,True,True,True,ĐỦ
+16001111,TraTien,TraTien,1.0000001,True,True,True,ĐỦ
