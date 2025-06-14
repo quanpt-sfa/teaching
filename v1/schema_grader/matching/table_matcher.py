@@ -1,21 +1,33 @@
+"""
+Table matching module for database schema grading.
+
+This module provides intelligent table matching between answer and student schemas
+using column similarity analysis and embedding-based semantic matching.
+"""
+
+from typing import Dict, List, Tuple
 import numpy as np
 from scipy.optimize import linear_sum_assignment
+
 from ..embedding.gemini import embed
 from .cosine import cosine_mat
 from ..utils.alias_maps import TABLE_ALIAS
 from ..utils.normalizer import canonical
 from ..utils.fuzzy import smart_token_match
 
-def count_matching_columns(ans_cols, stu_cols, match_threshold=70):
-    """Đếm số cột match giữa hai bảng.
+
+def count_matching_columns(ans_cols: List[Tuple[str, str]], 
+                          stu_cols: List[Tuple[str, str]], 
+                          match_threshold: int = 70) -> int:
+    """Count matching columns between two tables.
     
     Args:
         ans_cols: List of (name, type) tuples from answer table
         stu_cols: List of (name, type) tuples from student table
-        match_threshold: Ngưỡng điểm cho fuzzy matching (giảm từ 80 xuống 70)
+        match_threshold: Threshold for fuzzy matching (lowered from 80 to 70)
     
     Returns:
-        int: Số cặp cột match
+        int: Number of matching column pairs
     """
     count = 0
     used_stu_cols = set()

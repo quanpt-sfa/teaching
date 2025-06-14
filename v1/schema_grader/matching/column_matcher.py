@@ -1,56 +1,38 @@
+"""
+Column matching module for database schema grading.
+
+This module provides intelligent column matching between answer and student schemas
+using exact matching, cosine similarity, and Gemini API semantic analysis.
+"""
+
+from typing import List, Dict, Tuple, Optional
+import numpy as np
+from scipy.optimize import linear_sum_assignment
+
 from ..utils.fuzzy import fuzzy_eq
 from ..utils.normalizer import canonical
 from ..utils.embedding_helper import col_vec
 from ..embedding.gemini import embed
-import numpy as np
-from scipy.optimize import linear_sum_assignment
-from .type_check import same_type
-
-CODE_KEYWORDS = ("ma", "code", "id", "sohieu", "phieu", "voucher")
-TYPE_FAMILY = {
-    'char':'str','varchar':'str','nvarchar':'str',
-    'nchar':'str',
-    'int':'int','bigint':'int','smallint':'int',
-    'decimal':'num','numeric':'num','money':'num','real':'num','float':'num',
-    'date':'dt','datetime':'dt','smalldatetime':'dt'
-}
-
-def is_code_column(col_name: str) -> bool:
-    name = col_name.lower()
-    return any(name.startswith(k) or name.endswith(k) for k in CODE_KEYWORDS)
+from .type_check import same_type, is_code_column
 
 def semantic_similarity_gemini(col1: str, type1: str, col2: str, type2: str) -> float:
-    """Sử dụng Gemini API để đánh giá độ tương đồng semantic giữa 2 cột.
+    """Evaluate semantic similarity between two columns using Gemini API.
     
     Args:
-        col1: Tên cột thứ nhất
-        type1: Kiểu dữ liệu cột thứ nhất
-        col2: Tên cột thứ hai  
-        type2: Kiểu dữ liệu cột thứ hai
+        col1: First column name
+        type1: First column data type
+        col2: Second column name  
+        type2: Second column data type
         
     Returns:
-        float: Điểm tương đồng từ 0.0 đến 1.0
+        float: Similarity score from 0.0 to 1.0
     """
     try:
-        # Tạo prompt cho Gemini để đánh giá tính tương đồng
-        prompt = f"""So sánh 2 cột database sau và cho điểm tương đồng từ 0.0 đến 1.0:
-
-Cột 1: "{col1}" (kiểu: {type1})
-Cột 2: "{col2}" (kiểu: {type2})
-
-Xem xét:
-- Ý nghĩa semantic (ví dụ: MaHangHoa vs MaHang đều là mã hàng hóa)
-- Chức năng tương tự (ví dụ: DonGia vs GiaBan đều là giá tiền)
-- Từ viết tắt (ví dụ: PC có thể là PhieuChi)
-- Kiểu dữ liệu có phù hợp không
-
-Chỉ trả về 1 số thập phân duy nhất từ 0.0 đến 1.0, không giải thích."""
-
-        # Tạo embedding để tính similarity
+        # Use embedding-based similarity instead of prompt for efficiency
         embed1 = embed(f"{col1} {type1}")
         embed2 = embed(f"{col2} {type2}")
         
-        # Tính cosine similarity
+        # Calculate cosine similarity
         dot_product = sum(a * b for a, b in zip(embed1, embed2))
         norm1 = sum(a * a for a in embed1) ** 0.5
         norm2 = sum(b * b for b in embed2) ** 0.5
@@ -59,10 +41,10 @@ Chỉ trả về 1 số thập phân duy nhất từ 0.0 đến 1.0, không gi�
             return 0.0
             
         similarity = dot_product / (norm1 * norm2)
-        return max(0.0, min(1.0, similarity))  # Clamp về [0,1]
+        return max(0.0, min(1.0, similarity))  # Clamp to [0,1]
         
     except Exception as e:
-        print(f"Error in semantic similarity: {e}")
+        print(f"Warning: Semantic similarity failed for {col1}-{col2}: {e}")
         return 0.0
 
 def phase2_one(ans_tbl, stu_tbl, ans_schema, stu_schema):

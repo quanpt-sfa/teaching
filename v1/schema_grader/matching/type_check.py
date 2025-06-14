@@ -1,10 +1,25 @@
+"""
+Type checking utilities for database column type compatibility.
+
+This module provides functions to determine if two database column types
+are compatible for matching purposes.
+"""
+
+from typing import Tuple
+
+# Keywords that indicate a column contains codes/IDs
 CODE_KEYWORDS = ("ma", "code", "id", "sohieu", "phieu", "voucher")
+
+# Type family mapping for compatibility checking
 TYPE_FAMILY = {
-    'char':'str','varchar':'str','nvarchar':'str',
-    'nchar':'str',
-    'int':'int','bigint':'int','smallint':'int',
-    'decimal':'num','numeric':'num','money':'num','real':'num','float':'num',
-    'date':'dt','datetime':'dt','smalldatetime':'dt'
+    # String types
+    'char': 'str', 'varchar': 'str', 'nvarchar': 'str', 'nchar': 'str',
+    # Integer types  
+    'int': 'int', 'bigint': 'int', 'smallint': 'int',
+    # Numeric types
+    'decimal': 'num', 'numeric': 'num', 'money': 'num', 'real': 'num', 'float': 'num',
+    # Date types
+    'date': 'dt', 'datetime': 'dt', 'smalldatetime': 'dt'
 }
 
 def is_code_column(col_name: str) -> bool:
