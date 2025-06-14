@@ -63,38 +63,52 @@ def count_matching_columns(ans_cols: List[Tuple[str, str]],
                     break
     return count
 
-def phase1(ans_schema, stu_schema, TBL_TH=0.65):
+def phase1(ans_schema: Dict[str, Dict], stu_schema: Dict[str, Dict], TBL_TH: float = 0.65) -> Dict[str, str | None]:
     """Phase 1: Ghép bảng dựa trên số cột match và embedding.
     
     Args:
-        ans_schema: Schema đáp án 
-        stu_schema: Schema sinh viên
+        ans_schema: Schema đáp án {cleaned_ans_table_name: {'original_name': str, 'cols': [], ...}}
+        stu_schema: Schema sinh viên {cleaned_stu_table_name: {'original_name': str, 'cols': [], ...}}
         TBL_TH: Ngưỡng cosine để ghép bảng (giảm từ 0.80 xuống 0.65)
     
     Returns:
-        dict: Mapping từ bảng đáp án -> bảng sinh viên hoặc None
+        dict: Mapping từ cleaned_ans_table_name -> {'student_table': cleaned_stu_table_name or None, 'student_original_name': original_stu_name or None}
     """
-    ans = list(ans_schema)
-    stu = list(stu_schema)
+    ans_cleaned_names = list(ans_schema.keys())
+    stu_cleaned_names = list(stu_schema.keys())
     
+    if not ans_cleaned_names or not stu_cleaned_names:
+        # Handle empty schemas to prevent errors
+        mapping = {}
+        for a_tbl_cleaned in ans_cleaned_names:
+            mapping[a_tbl_cleaned] = {'student_table': None, 'student_original_name': None}
+        return mapping
+
     # Tạo ma trận số cột match
-    col_match_matrix = np.zeros((len(ans), len(stu)))
-    for i, a_tbl in enumerate(ans):
-        for j, s_tbl in enumerate(stu):
+    col_match_matrix = np.zeros((len(ans_cleaned_names), len(stu_cleaned_names)))
+    for i, a_tbl_cleaned in enumerate(ans_cleaned_names):
+        for j, s_tbl_cleaned in enumerate(stu_cleaned_names):
             col_match_matrix[i, j] = count_matching_columns(
-                ans_schema[a_tbl]['cols'],
-                stu_schema[s_tbl]['cols']
+                ans_schema[a_tbl_cleaned]['cols'],
+                stu_schema[s_tbl_cleaned]['cols']
             )
     
     # Tính điểm cosine similarity
-    vecA = np.stack([
-        embed(f"TABLE {t}: " + ", ".join(c for c, _ in ans_schema[t]['cols'][:30]))
-        for t in ans
-    ])
-    vecB = np.stack([
-        embed(f"TABLE {t}: " + ", ".join(c for c, _ in stu_schema[t]['cols'][:30]))
-        for t in stu
-    ])
+    # Ensure there are columns to embed, otherwise use table name only
+    vecA_list = []
+    for t_cleaned in ans_cleaned_names:
+        cols_str = ", ".join(c for c, _ in ans_schema[t_cleaned]['cols'][:30])
+        embed_text = f"TABLE {t_cleaned}: {cols_str}" if cols_str else f"TABLE {t_cleaned}"
+        vecA_list.append(embed(embed_text))
+    vecA = np.stack(vecA_list)
+
+    vecB_list = []
+    for t_cleaned in stu_cleaned_names:
+        cols_str = ", ".join(c for c, _ in stu_schema[t_cleaned]['cols'][:30])
+        embed_text = f"TABLE {t_cleaned}: {cols_str}" if cols_str else f"TABLE {t_cleaned}"
+        vecB_list.append(embed(embed_text))
+    vecB = np.stack(vecB_list)
+        
     sim = cosine_mat(vecA, vecB)
     
     # Tạo ma trận cost tổng hợp:
@@ -103,36 +117,51 @@ def phase1(ans_schema, stu_schema, TBL_TH=0.65):
     cost_matrix = -(col_match_matrix * 1000 + sim)
       # Loại bỏ các cặp không đạt ngưỡng tối thiểu
     min_cols = 1  # Ít nhất phải có 1 cột match
-    cost_matrix[col_match_matrix < min_cols] = 1e6
+    cost_matrix[col_match_matrix < min_cols] = 1e6 # Use a large positive number for invalid assignments
     
     # Tìm matching tối ưu
     r, c = linear_sum_assignment(cost_matrix)
     
     # Xây dựng mapping với logic linh hoạt hơn
-    mapping = {}
-    used_stu = set()
+    mapping: Dict[str, Dict[str, str | None]] = {}
+    # used_stu_cleaned = set() # Not strictly needed with linear_sum_assignment if all stu tables are considered assignable once
     
+    matched_stu_indices = set()
+
     for i, j in zip(r, c):
-        if i < len(ans):
-            # Giảm yêu cầu: có ít nhất 1 cột match HOẶC similarity cao
+        ans_tbl_cleaned = ans_cleaned_names[i]
+        stu_tbl_cleaned = stu_cleaned_names[j]
+        
+        # Check if this assignment is valid (cost is not the penalty value)
+        if cost_matrix[i, j] < 1e5: # Check against a value slightly less than 1e6
             has_col_match = col_match_matrix[i, j] >= min_cols
             has_high_similarity = sim[i, j] >= TBL_TH
             has_medium_similarity = sim[i, j] >= 0.5  # Ngưỡng thấp hơn
             
-            # Match nếu:
-            # 1. Có ít nhất 1 cột match VÀ similarity >= 0.5, HOẶC
-            # 2. Similarity rất cao (>= TBL_TH) dù không có cột match rõ ràng
             if (has_col_match and has_medium_similarity) or has_high_similarity:
-                mapping[ans[i]] = stu[j]
-                used_stu.add(stu[j])
-                print(f"Matched table: {ans[i]} -> {stu[j]} (cols: {col_match_matrix[i,j]}, sim: {sim[i,j]:.3f})")
+                mapping[ans_tbl_cleaned] = {
+                    'student_table': stu_tbl_cleaned,
+                    'student_original_name': stu_schema[stu_tbl_cleaned]['original_name']
+                }
+                matched_stu_indices.add(j)
+                print(f"Matched table: {ans_tbl_cleaned} (ans_original: {ans_schema[ans_tbl_cleaned]['original_name']}) -> {stu_tbl_cleaned} (stu_original: {stu_schema[stu_tbl_cleaned]['original_name']}) (cols: {col_match_matrix[i,j]}, sim: {sim[i,j]:.3f})")
             else:
-                mapping[ans[i]] = None
-                print(f"No match for table: {ans[i]} (best: cols={col_match_matrix[i,j]}, sim={sim[i,j]:.3f})")
-    
+                mapping[ans_tbl_cleaned] = {'student_table': None, 'student_original_name': None}
+                print(f"No match for table: {ans_tbl_cleaned} (ans_original: {ans_schema[ans_tbl_cleaned]['original_name']}) (best stu: {stu_tbl_cleaned}, cols={col_match_matrix[i,j]}, sim={sim[i,j]:.3f})")
+        else:
+            # This was a penalized assignment, so no match
+            mapping[ans_tbl_cleaned] = {'student_table': None, 'student_original_name': None}
+            # print(f"No valid assignment for table: {ans_tbl_cleaned} (ans_original: {ans_schema[ans_tbl_cleaned]['original_name']})")
+
+
     # Đảm bảo tất cả bảng đáp án đều có trong mapping
-    for tbl in ans:
-        if tbl not in mapping:
-            mapping[tbl] = None
+    for tbl_cleaned in ans_cleaned_names:
+        if tbl_cleaned not in mapping:
+            mapping[tbl_cleaned] = {'student_table': None, 'student_original_name': None}
+            # print(f"Ensuring unassigned answer table {tbl_cleaned} (ans_original: {ans_schema[tbl_cleaned]['original_name']}) is in mapping as None.")
             
     return mapping
+
+# ... (rest of the file, if any, can be added here if needed)
+# For example, if there's a phase2 or other functions.
+# If not, this is the end of the relevant section.

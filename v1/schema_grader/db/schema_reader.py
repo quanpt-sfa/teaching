@@ -3,7 +3,10 @@ from .connection import open_conn
 from ..config import STAGE_RE
 
 def _clean_table_name(name: str) -> str:
-    return re.sub(r'^\d+\.\s*', '', name)
+    # Remove numeric prefixes like "08." or "07. " (with optional space after dot)
+    cleaned = re.sub(r'^\d+\.\s*', '', name)
+    # Convert to uppercase for consistency
+    return cleaned.upper()
 
 def get_table_structures(conn):
     sql = """
@@ -15,7 +18,22 @@ def get_table_structures(conn):
             WHERE TABLE_TYPE='BASE TABLE' AND LEFT(TABLE_NAME,3) <> 'sys')
         ORDER BY TABLE_NAME, ORDINAL_POSITION"""
     rows = conn.cursor().execute(sql).fetchall()
-    return [(_clean_table_name(t), c, d) for t, c, d in rows]
+    
+    table_data = []
+    # Debug: Print raw table names from database
+    raw_table_names = set()
+    
+    for original_t, c, d in rows:
+        raw_table_names.add(original_t)
+        cleaned_t = _clean_table_name(original_t)
+        table_data.append({'original_name': original_t, 'cleaned_name': cleaned_t, 'column_name': c, 'data_type': d})
+    
+    print(f"Debug: Raw table names from DB: {sorted(raw_table_names)}")
+    print(f"Debug: Sample cleaning - '08.CT_ChiTien' -> '{_clean_table_name('08.CT_ChiTien')}'")
+    print(f"Debug: Sample cleaning - '07.ChiTien' -> '{_clean_table_name('07.ChiTien')}'")
+    print(f"Debug: Sample cleaning - '07. CHITIEN' -> '{_clean_table_name('07. CHITIEN')}'")
+    
+    return table_data
 
 def get_primary_keys(conn):
     sql = """
@@ -26,8 +44,8 @@ def get_primary_keys(conn):
         WHERE LEFT(KU.TABLE_NAME,3) <> 'sys'
         ORDER BY KU.TABLE_NAME, KU.ORDINAL_POSITION"""
     pk = {}
-    for tbl, col in conn.cursor().execute(sql):
-        pk.setdefault(tbl, []).append(col)
+    for tbl_original_name, col in conn.cursor().execute(sql):
+        pk.setdefault(tbl_original_name, []).append(col)
     return pk
 
 def get_foreign_keys_full(conn):
@@ -45,11 +63,15 @@ def get_foreign_keys_full(conn):
         WHERE LEFT(tp.name,3)<>'sys' AND LEFT(ref.name,3)<>'sys'
         ORDER BY fk.name"""
     rows, out = conn.cursor().execute(sql).fetchall(), {}
-    for fk, p_tbl, fk_col, r_tbl, pk_col in rows:
-        key = (fk, p_tbl, r_tbl)
+    for fk_name, p_tbl_original, fk_col, r_tbl_original, pk_col in rows:
+        key = (fk_name, p_tbl_original, r_tbl_original)
+
         out.setdefault(key, {
-            'parent_tbl': p_tbl, 'parent_cols': [], 
-            'ref_tbl': r_tbl,   'ref_cols': []})
+            'parent_tbl': p_tbl_original, # Store original name
+            'parent_cols': [], 
+            'ref_tbl': r_tbl_original,   # Store original name
+            'ref_cols': []
+        })
         out[key]['parent_cols'].append(fk_col)
         out[key]['ref_cols'].append(pk_col)
     return list(out.values())

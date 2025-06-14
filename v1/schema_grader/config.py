@@ -15,7 +15,7 @@ try:
         load_dotenv(env_path)
         print(f"✅ Loaded environment from {env_path}")
 except ImportError:
-    print("💡 Tip: Install python-dotenv to use .env files: pip install python-dotenv")
+    pass  # Silently skip if dotenv not available
 
 from .utils.constants import (
     STAGE_RE, FUZZY_THRESHOLD,

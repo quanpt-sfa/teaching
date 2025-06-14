@@ -1,20 +1,36 @@
 #!/usr/bin/env python3
 """
-Setup script for database schema grading system.
+Setup script for database schema grading system v1.3.2.
 
 This script helps users configure API keys and environment variables.
 """
+
+# Version information
+__version__ = "1.3.2"
+__release_date__ = "2025-06-14"
 
 import os
 import sys
 from pathlib import Path
 
+def print_version_info():
+    """Print version and changelog info."""
+    print(f"🚀 Database Schema Grading System v{__version__}")
+    print(f"📅 Release Date: {__release_date__}")
+    print("=" * 60)
+    print("🎯 What's New in v1.3.2:")
+    print("  ✅ Fixed STAGE_RE regex filtering issue")
+    print("  🔧 Enhanced table name handling for numeric prefixes")
+    print("  📊 Improved row count analysis accuracy")
+    print("  🛠️  Better error handling and debug logging")
+    print("=" * 60)
+    print()
+
 def create_env_file():
     """Create .env file interactively."""
     env_path = Path(".env")
     
-    print("🚀 Database Schema Grading System Setup")
-    print("=" * 50)
+    print_version_info()
     
     if env_path.exists():
         overwrite = input("⚠️  .env file already exists. Overwrite? (y/N): ").lower()
@@ -91,6 +107,7 @@ def test_configuration():
 
 def main():
     """Main setup function."""
+    print_version_info()
     if len(sys.argv) > 1 and sys.argv[1] == "test":
         test_configuration()
     else:

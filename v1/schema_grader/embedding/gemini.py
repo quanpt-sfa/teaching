@@ -21,32 +21,47 @@ _API_AVAILABLE = False
 _GENAI_MODULE = None
 
 def _initialize_gemini():
-    """Initialize Gemini API if available."""
+    """Initialize Gemini API with smart fallback."""
     global _API_AVAILABLE, _GENAI_MODULE
     
     try:
         import google.generativeai as genai
         _GENAI_MODULE = genai
         
-        # Check for API key
-        api_key = API_KEY or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        # Get API key from multiple sources
+        api_key = API_KEY
         
         if not api_key:
-            warnings.warn(
-                "No Gemini API key found. Using fallback embedding method. "
-                "Set GOOGLE_API_KEY or GEMINI_API_KEY environment variable for full functionality.",
-                UserWarning
+            print("ℹ️  No Gemini API key found - using fallback embedding")
+            _API_AVAILABLE = False
+            return False
+        
+        # Test the API key
+        genai.configure(api_key=api_key)
+        
+        # Quick test to verify API works
+        try:
+            test_result = genai.embed_content(
+                model=MODEL, 
+                content="test",
+                task_type="SEMANTIC_SIMILARITY"
             )
+            _API_AVAILABLE = True
+            print("✅ Gemini API working successfully")
+            return True
+            
+        except Exception as api_error:
+            print(f"⚠️  Gemini API key invalid or quota exceeded: {api_error}")
+            print("   Using fallback embedding method")
             _API_AVAILABLE = False
             return False
             
-        genai.configure(api_key=api_key)
-        _API_AVAILABLE = True
-        print("✅ Gemini API initialized successfully")
-        return True
-        
+    except ImportError:
+        print("ℹ️  google-generativeai not installed - using fallback embedding")
+        _API_AVAILABLE = False
+        return False
     except Exception as e:
-        warnings.warn(f"Failed to initialize Gemini API: {e}. Using fallback embedding.", UserWarning)
+        print(f"ℹ️  Gemini API setup failed: {e} - using fallback embedding")
         _API_AVAILABLE = False
         return False
 

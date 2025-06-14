@@ -19,6 +19,9 @@ def calc_schema_score(answer_schema, student_schema,
                       TBL_TH=0.80, COL_TH=0.82, SCORE_PER_TABLE=0.5):
     ans_tbls = list(answer_schema.keys())
     stu_tbls = list(student_schema.keys())
+    # If either schema is empty, return zero score and no table results to avoid stack errors
+    if not ans_tbls or not stu_tbls:
+        return 0.0, []
     tbl_vec_ans = {t: embed(ser_table(t, m)) for t, m in answer_schema.items()}
     tbl_vec_stu = {t: embed(ser_table(t, m)) for t, m in student_schema.items()}
     A = np.stack([tbl_vec_ans[t] for t in ans_tbls])

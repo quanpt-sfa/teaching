@@ -71,3 +71,28 @@ def log(msg: str, file: Optional[str] = None) -> None:
 
 # Default logger instance
 default_logger = GradingLogger()
+
+def get_logger(name: str = "schema_grader"):
+    """
+    Get a logger instance for the specified module.
+    
+    Args:
+        name: Logger name, typically __name__ of the calling module
+        
+    Returns:
+        Standard logging.Logger instance
+    """
+    logger = logging.getLogger(name)
+    if not logger.handlers:
+        logger.setLevel(logging.INFO)
+        
+        # Console handler
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_formatter = logging.Formatter(
+            '%(asctime)s | %(levelname)-8s | %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        console_handler.setFormatter(console_formatter)
+        logger.addHandler(console_handler)
+    
+    return logger
