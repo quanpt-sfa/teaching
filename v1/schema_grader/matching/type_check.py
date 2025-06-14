@@ -23,7 +23,7 @@ def same_type(atype: str, btype: str, col_a: str, col_b: str) -> bool:
     """Kiểm tra hai kiểu dữ liệu có tương thích không.
     
     - Nếu là cột mã: chấp nhận int/varchar/char
-    - Còn lại: phải cùng họ type
+    - Còn lại: linh hoạt hơn, chấp nhận các kiểu trong cùng họ
     
     Args:
         atype: Kiểu dữ liệu thứ nhất
@@ -34,9 +34,23 @@ def same_type(atype: str, btype: str, col_a: str, col_b: str) -> bool:
     Returns:
         bool: True nếu hai kiểu tương thích
     """
-    if is_code_column(col_a) and is_code_column(col_b):
-        return atype.lower() in ('char','varchar','nvarchar','int','bigint','smallint') \
-           and btype.lower() in ('char','varchar','nvarchar','int','bigint','smallint')
-    fam_a = TYPE_FAMILY.get(atype.lower(), atype.lower())
-    fam_b = TYPE_FAMILY.get(btype.lower(), btype.lower())
+    # Chuẩn hóa tên kiểu
+    atype_lower = atype.lower()
+    btype_lower = btype.lower()
+    
+    # Nếu một trong hai là cột mã, chấp nhận string và int
+    if is_code_column(col_a) or is_code_column(col_b):
+        string_types = ('char','varchar','nvarchar','nchar')
+        int_types = ('int','bigint','smallint')
+        
+        a_is_string = atype_lower in string_types
+        a_is_int = atype_lower in int_types
+        b_is_string = btype_lower in string_types  
+        b_is_int = btype_lower in int_types
+        
+        return (a_is_string or a_is_int) and (b_is_string or b_is_int)
+    
+    # Cho các cột khác, chấp nhận cùng họ kiểu dữ liệu
+    fam_a = TYPE_FAMILY.get(atype_lower, atype_lower)
+    fam_b = TYPE_FAMILY.get(btype_lower, btype_lower)
     return fam_a == fam_b
