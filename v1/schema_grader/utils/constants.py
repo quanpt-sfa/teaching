@@ -21,7 +21,8 @@ COLUMN_SIMILARITY_THRESHOLD: Final[float] = 0.75
 SEMANTIC_SIMILARITY_THRESHOLD: Final[float] = 0.5
 
 # === API Configuration ===
-API_KEY: Final[str] = os.getenv("GEMINI_API_KEY", "")
+# Remove hardcoded API key for security
+API_KEY: Final[str] = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
 MODEL: Final[str] = "models/text-embedding-004"
 EMBED_CACHE_FILE: Final[str] = 'embedding_cache.pkl'
 

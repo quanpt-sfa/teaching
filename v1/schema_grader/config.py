@@ -5,6 +5,18 @@ Configuration module for the database schema grading system.
 import os
 from dataclasses import dataclass
 from typing import Optional
+from pathlib import Path
+
+# Try to load .env file if available
+try:
+    from dotenv import load_dotenv
+    env_path = Path(__file__).parent.parent.parent / '.env'
+    if env_path.exists():
+        load_dotenv(env_path)
+        print(f"✅ Loaded environment from {env_path}")
+except ImportError:
+    print("💡 Tip: Install python-dotenv to use .env files: pip install python-dotenv")
+
 from .utils.constants import (
     STAGE_RE, FUZZY_THRESHOLD,
     API_KEY, MODEL, EMBED_CACHE_FILE

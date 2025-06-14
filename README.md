@@ -12,8 +12,29 @@ A Python package for automated grading of database schemas with support for tabl
 
 ## Installation
 
+1. **Install dependencies:**
 ```bash
 pip install -r requirements.txt
+```
+
+2. **Setup configuration:**
+```bash
+# Interactive setup
+python setup.py
+
+# Or manually create .env file
+cp .env.example .env
+# Edit .env with your configuration
+```
+
+3. **Get Gemini API Key (optional but recommended):**
+   - Visit: https://aistudio.google.com/app/apikey
+   - Create a new API key
+   - Add it to your `.env` file as `GOOGLE_API_KEY=your_key_here`
+
+4. **Test installation:**
+```bash
+python setup.py test
 ```
 
 ## Usage
