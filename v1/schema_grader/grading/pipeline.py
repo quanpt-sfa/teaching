@@ -12,6 +12,8 @@ from ..foreign_key.fk_matcher import compare_foreign_keys
 from .schema_grader import calc_schema_score
 from .reporter import save_schema_results_csv, save_row_count_summary
 from .row_count_checker import check_mapped_table_row_counts, format_row_count_results
+from .view_matcher import match_views, save_view_matches_to_csv, get_views_info
+
 
 def run_for_one_bak(bak_path, server, user, pw, data_folder,
                     answer_schema, out_dir, check_row_counts=True) -> dict:
@@ -28,10 +30,9 @@ def run_for_one_bak(bak_path, server, user, pw, data_folder,
             stu_struct = clean_rows(stu_struct)
             stu_pk = schema_reader.get_primary_keys(conn)
             stu_fk = schema_reader.get_foreign_keys_full(conn)
-            
             # Khởi tạo bảng ForeignKeyInfo (bỏ qua nếu lỗi)
             fk_initialized = initialize_database(conn)
-            
+        
         student_schema = build_schema_dict(stu_struct, stu_pk, stu_fk)
         
         # Ghép bảng & cột
@@ -43,7 +44,7 @@ def run_for_one_bak(bak_path, server, user, pw, data_folder,
             # Only proceed if a student table was matched
             if stu_cleaned:
                 all_rows.extend(phase2_one(ans_tbl, stu_cleaned, answer_schema, student_schema))
-            
+        
         # Lưu kết quả chi tiết
         if all_rows:
             os.makedirs(out_dir, exist_ok=True)
@@ -57,7 +58,6 @@ def run_for_one_bak(bak_path, server, user, pw, data_folder,
             if fk_initialized:
                 with connection.open_conn(server, user, pw, database='00000001') as ans_conn, \
                      connection.open_conn(server, user, pw, database=db_name) as stu_conn:
-                        
                     # Khởi tạo bảng ForeignKeyInfo cho cả hai database
                     ans_ok = initialize_database(ans_conn)
                     stu_ok = initialize_database(stu_conn)
@@ -102,11 +102,35 @@ def run_for_one_bak(bak_path, server, user, pw, data_folder,
         # Tính điểm schema
         schema_score, table_results = calc_schema_score(answer_schema, student_schema)
         
+        # So khớp view và lưu file view trước khi xóa database
+        with connection.open_conn(server, user, pw, database='00000001') as ans_conn, \
+             connection.open_conn(server, user, pw, database=db_name) as stu_conn:
+            answer_views = get_views_info(ans_conn)
+            student_views = get_views_info(stu_conn)
+            view_results = []
+            for ans_view in answer_views:
+                for stu_view in student_views:
+                    matched = (
+                        ans_view['num_columns'] == stu_view['num_columns'] and
+                        ans_view['num_rows'] == stu_view['num_rows']
+                    )
+                    if matched:
+                        view_results.append({
+                            'view': ans_view['view_name'],
+                            'ans_cols': ans_view['num_columns'],
+                            'stu_cols': stu_view['num_columns'],
+                            'ans_rows': ans_view['num_rows'],
+                            'stu_rows': stu_view['num_rows'],
+                            'matched': matched
+                        })
+            save_view_matches_to_csv(view_results, db_name, out_dir)
+        
         # Thêm thông tin row count vào kết quả
         result = {
             'db_name': db_name, 
             'schema_score': schema_score, 
-            'table_results': table_results
+            'table_results': table_results,
+            'student_schema': student_schema  # Thêm student_schema để dùng cho view matching
         }
         
         # Thêm kết quả row count nếu có
@@ -121,6 +145,7 @@ def run_for_one_bak(bak_path, server, user, pw, data_folder,
             result['fk_results'] = fk_results
             result['fk_ratio'] = fk_ratio if 'fk_ratio' in locals() else 0
         
+        # (KHÔNG gọi view_matcher ở đây)
         return result
         
     except Exception as e:
@@ -132,6 +157,7 @@ def run_for_one_bak(bak_path, server, user, pw, data_folder,
         # Luôn xóa database khi xong việc
         if db_name:
             drop_database(server, user, pw, db_name)
+
 
 def run_batch(bak_folder, answer_db_schema, server, user, pw, data_folder, out_dir, check_row_counts=True):
     """Chấm hàng loạt file .bak trong thư mục"""
@@ -149,16 +175,16 @@ def run_batch(bak_folder, answer_db_schema, server, user, pw, data_folder, out_d
                 results.append(res)
                 
     save_schema_results_csv(results, os.path.join(out_dir, "schema_grading_results.csv"))
-    
+
     # Save row count summary if any results have row count data
     if check_row_counts and any('row_count_results' in r for r in results):
         save_row_count_summary(results, out_dir)
-    
+
     # Sau khi grading xong, sinh summary_table.csv từ các file csv đã sinh ra
     import subprocess
     summary_script = os.path.join(os.path.dirname(__file__), 'summary_table.py')
     summary_csv = os.path.join(out_dir, 'summary_table.csv')
     subprocess.run(['python', summary_script, out_dir, summary_csv], check=True)
     print(f"Summary table generated at {summary_csv}")
-    
+
     return results
