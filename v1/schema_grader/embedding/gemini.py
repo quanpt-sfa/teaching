@@ -1,174 +1,135 @@
 """
-Gemini API embedding module with fallback support.
-
-This module provides text embedding functionality using Google's Gemini API
-with intelligent fallback when API key is not available.
+Refactored Gemini API embedding module with unified initialization and fallback.
 """
 
-import numpy as np
-import pickle
-import hashlib
 import os
+import hashlib
+import pickle
 import warnings
 from functools import lru_cache
 from typing import Optional
 
+import numpy as np
+
 from ..utils.constants import API_KEY, MODEL, EMBED_CACHE_FILE
 from ..utils.domain_dict import COMMON_SCHEMA_PATTERNS
 
-# Global variables for API state
+# State for Gemini API availability
 _API_AVAILABLE = False
-_GENAI_MODULE = None
+_GENAI = None
 
-def _initialize_gemini():
-    """Initialize Gemini API with smart fallback."""
-    global _API_AVAILABLE, _GENAI_MODULE
-    
+
+def _load_api_key() -> Optional[str]:
+    """Retrieve API key from environment or constants."""
+    key = API_KEY or os.getenv("GOOGLE_API_KEY")
+    return key.strip() if key else None
+
+
+def _initialize_api() -> bool:
+    """Load genai module, configure and test the Gemini API key."""
+    global _API_AVAILABLE, _GENAI
     try:
         import google.generativeai as genai
-        _GENAI_MODULE = genai
-        
-        # Get API key from multiple sources
-        api_key = API_KEY
-        
-        if not api_key:
-            print("ℹ️  No Gemini API key found - using fallback embedding")
-            _API_AVAILABLE = False
-            return False
-        
-        # Test the API key
-        genai.configure(api_key=api_key)
-        
-        # Quick test to verify API works
-        try:
-            test_result = genai.embed_content(
-                model=MODEL, 
-                content="test",
-                task_type="SEMANTIC_SIMILARITY"
-            )
-            _API_AVAILABLE = True
-            print("✅ Gemini API working successfully")
-            return True
-            
-        except Exception as api_error:
-            print(f"⚠️  Gemini API key invalid or quota exceeded: {api_error}")
-            print("   Using fallback embedding method")
-            _API_AVAILABLE = False
-            return False
-            
+        _GENAI = genai
     except ImportError:
-        print("ℹ️  google-generativeai not installed - using fallback embedding")
-        _API_AVAILABLE = False
+        warnings.warn("google-generativeai not installed; using fallback embedding.")
         return False
+
+    key = _load_api_key()
+    if not key:
+        warnings.warn("No Gemini API key found; using fallback embedding.")
+        return False
+
+    genai.configure(api_key=key)
+    # Single test call to validate key
+    try:
+        genai.embed_content(model=MODEL, content="test", task_type="SEMANTIC_SIMILARITY")
+        _API_AVAILABLE = True
+        return True
     except Exception as e:
-        print(f"ℹ️  Gemini API setup failed: {e} - using fallback embedding")
-        _API_AVAILABLE = False
+        warnings.warn(f"Gemini API test failed: {e}; fallback embedding.")
         return False
 
-# Initialize on import
-_initialize_gemini()
 
-# Load embedding cache
+# Run initialization
+_initialize_api()
+
+# Load or create cache
 try:
     with open(EMBED_CACHE_FILE, 'rb') as f:
-        CACHE = pickle.load(f)
+        _CACHE = pickle.load(f)
 except Exception:
-    CACHE = {}
+    _CACHE = {}
+
 
 def _get_domain_context(text: str) -> str:
-    """Tạo ngữ cảnh miền cho một từ/cụm từ."""
-    # Tìm các pattern tương đương trong từ điển miền
-    related_terms = []
-    text_lower = text.lower()
-    
-    for pattern, synonyms in COMMON_SCHEMA_PATTERNS.items():
-        if pattern in text_lower or any(s in text_lower for s in synonyms):
-            related_terms.append(f"{pattern} = " + " = ".join(synonyms))
-    
-    domain_context = f"""
-    Trong ngữ cảnh kế toán và quản lý tài chính:
-    {text}
-    
-    Các khái niệm tương đương:
-    {chr(10).join('- ' + t for t in related_terms)}
-    
-    Quy tắc chung:
-    - Chi tiền = Trả tiền = Thanh toán
-    - Chi tiết (CT) = Details
-    - Mã = ID = Số
-    - Tổng tiền = Thành tiền = Amount
-    """
-    return domain_context
+    """Build domain-specific context for embedding."""
+    text_l = text.lower()
+    related = []
+    for pat, syns in COMMON_SCHEMA_PATTERNS.items():
+        if pat in text_l or any(s in text_l for s in syns):
+            related.append(f"{pat}: {', '.join(syns)}")
+
+    lines = [f"- {r}" for r in related]
+    context = (
+        "Trong ngữ cảnh kế toán và quản lý tài chính:\n"
+        f"{text}\n"
+        "Các khái niệm tương đương:\n"
+        + "\n".join(lines)
+    )
+    return context
+
 
 def _fallback_embed(text: str) -> np.ndarray:
-    """Fallback embedding method using simple hashing when Gemini API is not available."""
-    # Simple hash-based embedding for fallback
-    hash_val = hashlib.sha256(text.encode()).hexdigest()
-    
-    # Convert hex to numbers and create a vector
-    vec = np.array([int(hash_val[i:i+2], 16) for i in range(0, min(64, len(hash_val)), 2)], dtype=np.float32)
-    
-    # Pad or truncate to fixed size (384 dimensions like Gemini)
-    target_size = 384
-    if len(vec) < target_size:
-        vec = np.pad(vec, (0, target_size - len(vec)), mode='constant')
+    """Hash-based fallback embedding."""
+    h = hashlib.sha256(text.encode()).hexdigest()
+    arr = np.array([int(h[i:i+2], 16) for i in range(0, min(64, len(h)), 2)], dtype=np.float32)
+    if arr.size < 384:
+        arr = np.pad(arr, (0, 384 - arr.size), 'constant')
     else:
-        vec = vec[:target_size]
-    
-    # Normalize
-    vec = vec / (np.linalg.norm(vec) + 1e-8)
-    return vec
+        arr = arr[:384]
+    return arr / (np.linalg.norm(arr) + 1e-8)
+
 
 @lru_cache(maxsize=None)
 def embed(text: str) -> np.ndarray:
-    """Embed text into vector with caching and domain context."""
+    """Embed text via Gemini API or fallback, with caching."""
     key = hashlib.sha256(text.encode()).hexdigest()
-    if key in CACHE:
-        return CACHE[key]
-    
-    try:
-        if _API_AVAILABLE and _GENAI_MODULE:
-            # Use Gemini API
-            context = _get_domain_context(text)
-            result = _GENAI_MODULE.embed_content(
-                model=MODEL, 
-                content=context,
-                task_type="SEMANTIC_SIMILARITY"
-            )
-            vec = np.array(result['embedding'], dtype=np.float32)
-            vec /= np.linalg.norm(vec) + 1e-8
-        else:
-            # Use fallback method
+    if key in _CACHE:
+        return _CACHE[key]
+
+    if _API_AVAILABLE and _GENAI:
+        content = _get_domain_context(text)
+        try:
+            resp = _GENAI.embed_content(model=MODEL, content=content, task_type="SEMANTIC_SIMILARITY")
+            vec = np.array(resp['embedding'], dtype=np.float32)
+            vec /= (np.linalg.norm(vec) + 1e-8)
+        except Exception as e:
+            warnings.warn(f"Embedding error: {e}; using fallback.")
             vec = _fallback_embed(text)
-            
-    except Exception as e:
-        print(f"Warning: Embedding failed for '{text}': {e}. Using fallback.")
+    else:
         vec = _fallback_embed(text)
-    
-    # Cache the result
-    CACHE[key] = vec
+
+    _CACHE[key] = vec
     try:
         with open(EMBED_CACHE_FILE, 'wb') as f:
-            pickle.dump(CACHE, f)
+            pickle.dump(_CACHE, f)
     except Exception:
-        pass  # Ignore cache save errors
-        
+        pass
     return vec
 
+
 def test_similarity():
-    """Hàm test độ tương đồng ngữ nghĩa giữa các cụm từ."""
+    """Test semantic similarity between sample phrases."""
     pairs = [
         ("chi tiền", "trả tiền"),
         ("phiếu chi", "phiếu trả"),
         ("chi tiết chi tiền", "chi tiết trả tiền"),
         ("CT chi tiền", "CT trả tiền"),
-        ("ChiTietChiTien", "ChiTietTraTien")
+        ("ChiTietChiTien", "ChiTietTraTien"),
     ]
-    
     for a, b in pairs:
-        va = embed(a)
-        vb = embed(b)
-        sim = np.dot(va, vb)
+        sim = np.dot(embed(a), embed(b))
         print(f"{a} ~ {b}: {sim:.3f}")
 
 if __name__ == "__main__":
