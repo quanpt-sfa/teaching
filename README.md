@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Database Schema Grading System
 
 A Python package for automated grading of database schemas with support for table/column matching, foreign key analysis, and row count validation.
@@ -93,3 +94,7 @@ grading/
 ## License
 
 MIT License
+=======
+# teaching
+A repository for projects used to facilitate my teaching
+>>>>>>> origin/main

@@ -6,7 +6,7 @@ def generate_summary_from_csvs(csv_folder: str, output_path: str) -> None:
     """
     Đọc các file CSV *_pairs.csv, *_fk.csv, *_rowcount.csv trong csv_folder
     và tạo bảng tổng hợp với các cột:
-      MSSV | Tỷ lệ cột đúng | Tỷ lệ khóa ngoại đúng | Tỷ lệ nhập dữ liệu đúng | Tỷ lệ nghiệp vụ đúng | Tỷ lệ view đúng
+    git remote remove origin    git remote remove origin      MSSV | Tỷ lệ cột đúng | Tỷ lệ khóa ngoại đúng | Tỷ lệ nhập dữ liệu đúng | Tỷ lệ nghiệp vụ đúng | Tỷ lệ view đúng
 
     Kết quả sẽ được ghi ra output_path dưới dạng CSV.
     """
