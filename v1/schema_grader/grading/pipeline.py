@@ -154,4 +154,11 @@ def run_batch(bak_folder, answer_db_schema, server, user, pw, data_folder, out_d
     if check_row_counts and any('row_count_results' in r for r in results):
         save_row_count_summary(results, out_dir)
     
+    # Sau khi grading xong, sinh summary_table.csv từ các file csv đã sinh ra
+    import subprocess
+    summary_script = os.path.join(os.path.dirname(__file__), 'summary_table.py')
+    summary_csv = os.path.join(out_dir, 'summary_table.csv')
+    subprocess.run(['python', summary_script, out_dir, summary_csv], check=True)
+    print(f"Summary table generated at {summary_csv}")
+    
     return results

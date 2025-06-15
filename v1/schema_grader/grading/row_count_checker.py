@@ -334,7 +334,7 @@ def format_row_count_results(row_count_results: Dict, student_id: str) -> List[D
             biz_ok = False
         else:
             data_ok = False
-            biz_ok = Fal se
+            biz_ok = False
 
         data_text = 'Có' if data_ok else 'Không'
         biz_text  = 'Có' if biz_ok  else 'Không'
