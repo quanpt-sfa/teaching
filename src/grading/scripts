@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""
+Main CLI script for the database schema grading system
+"""
+
+import argparse
+import sys
+import csv
+from pathlib import Path
+
+# Add src to path
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+from grading import SchemaGrader
+
+
+def main():
+    """Main CLI entry point"""
+    parser = argparse.ArgumentParser(description="Database Schema Grading System")
+    
+    parser.add_argument("--student-id", required=True, help="Student ID")
+    parser.add_argument("--student-db", required=True, help="Path to student database")
+    parser.add_argument("--config", help="Path to configuration file")
+    parser.add_argument("--output", help="Output CSV file path", default="output/results.csv")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+    
+    args = parser.parse_args()
+    
+    # Initialize grader
+    grader = SchemaGrader(args.config)
+    
+    # Grade submission
+    results = grader.grade(args.student_id, args.student_db)
+    
+    # Output results
+    if args.verbose:
+        print(f"Grading results for student {args.student_id}:")
+        print(f"Overall score: {results.get('overall_score', 0)}")
+        
+        if 'error' in results:
+            print(f"Error: {results['error']}")
+        else:
+            row_analysis = results.get('row_count_analysis', {})
+            print(f"Tables analyzed: {len(row_analysis.get('mapped_tables', {}))}")
+    
+    # Save to CSV if requested
+    if args.output:
+        save_results_to_csv(results, args.output)
+        print(f"Results saved to {args.output}")
+
+
+def save_results_to_csv(results: dict, output_path: str):
+    """Save results to CSV file"""
+    output_file = Path(output_path)
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    # This would need to be implemented based on the specific format needed
+    # For now, just create a basic CSV
+    with open(output_file, 'w', newline='', encoding='utf-8-sig') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Student ID', 'Overall Score', 'Status'])
+        
+        student_id = results.get('student_id', 'Unknown')
+        score = results.get('overall_score', 0)
+        status = 'Error' if 'error' in results else 'Success'
+        
+        writer.writerow([student_id, score, status])
+
+
+if __name__ == "__main__":
+    main()

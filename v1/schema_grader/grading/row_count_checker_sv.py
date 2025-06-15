@@ -12,12 +12,6 @@ from ..utils.log import get_logger
 logger = get_logger(__name__)
 
 # Expected business logic changes for the specific assignment
-# BUSINESS_LOGIC_CHANGES xác định các bảng nghiệp vụ dựa trên các truy vấn nghiệp vụ:
-# 1. NhaCungCap: Thêm nhà cung cấp mới “Michael Đẹp trai”
-# 2. NhanVien: Thêm nhân viên mới “Mariya Sergienko”
-# 3. HangHoa: Thêm hàng hóa mới “Crab Meat (12 - 4 oz tins)”
-# 4. MuaHang: Nhập giao dịch Mua hàng số phiếu '71'
-# 5. ChiTietMuaHang: Nhập chi tiết MuaHang cho phiếu '71'
 BUSINESS_LOGIC_CHANGES = {
     'NhaCungCap': 1,      # +1 Michael Đẹp trai
     'NhanVien': 1,        # +1 Mariya Sergienko
@@ -113,9 +107,6 @@ def check_mapped_table_row_counts(answer_conn, student_conn, table_mapping: Dict
         # The values contain the cleaned student table name and the *original* student table name.
         # We assume answer table names for querying are their cleaned names (e.g., "NhaCungCap")
         # For student tables, we MUST use 'student_original_name' for querying.
-
-        # Chuẩn hóa tên bảng để so sánh không phân biệt hoa thường
-        business_keys = {tbl.lower() for tbl in BUSINESS_LOGIC_CHANGES}
 
         for ans_cleaned_table, stu_map_info in table_mapping.items():
             # Retrieve original answer table name for querying
@@ -298,77 +289,170 @@ def check_mapped_table_row_counts(answer_conn, student_conn, table_mapping: Dict
 
 def format_row_count_results(row_count_results: Dict, student_id: str) -> List[Dict]:
     """Format comprehensive row count results for CSV output."""
+    
     csv_rows = []
+    
     if 'error' in row_count_results:
-        return [{
+        csv_rows.append({
             'MSSV': student_id,
             'Tên bảng đáp án': 'ERROR',
             'Tên bảng sinh viên': 'ERROR',
             'Số dòng đáp án': 0,
             'Số dòng sinh viên': 0,
             'Chênh lệch': 0,
-            'Đã nhập đúng dữ liệu': 0,
-            'Đã nhập đúng nghiệp vụ': 0,
-            'Là bảng nghiệp vụ': 0,
+            'Đã nhập đúng dữ liệu': 'Không',
+            'Đã import đúng': 'Không',
+            'Đã nhập đúng nghiệp vụ': 'Không',
+            'Là bảng nghiệp vụ': 'Không',
             'Điểm nghiệp vụ': '0/5',
             'Trạng thái': 'Lỗi',
-            'Ghi chú': str(row_count_results['error'])
-        }]
+            'Ghi chú': str(row_count_results['error'])        })
+        return csv_rows
+    
+    # Process all mapped tables
     mapped_tables = row_count_results.get('mapped_tables', {})
     summary = row_count_results.get('summary', {})
-    business_keys = {tbl.lower() for tbl in BUSINESS_LOGIC_CHANGES}
-    for answer_table_cleaned, table_data in mapped_tables.items():
-        is_business_table = answer_table_cleaned.lower() in business_keys
+    
+    for answer_table_cleaned, table_data in mapped_tables.items(): # Iterate using cleaned answer table name
+        is_business = table_data.get('is_business_table', False)
+        # exact_match = table_data.get('exact_match', False) # This alone is not enough for "Đã nhập đúng dữ liệu"
         answer_count = table_data.get('answer_count', 0)
         student_count = table_data.get('student_count', 0)
         difference = table_data.get('difference', 0)
-        student_display = table_data.get('student_table_original_for_query', table_data.get('student_table_cleaned', 'N/A'))
-        error = table_data.get('error')
-
-        # --- TÍNH LẠI 2 FLAG THEO YÊU CẦU ---
-        if difference == 0:
-            data_ok = True
-            biz_ok = True
-        elif difference == -1 and is_business_table:
-            data_ok = True
-            biz_ok = False
-        else:
-            data_ok = False
-            biz_ok = Fal se
-
-        data_text = 'Có' if data_ok else 'Không'
-        biz_text  = 'Có' if biz_ok  else 'Không'
-
-        # --- CẬP NHẬT STATUS VÀ NOTE ---
-        if error or student_display == 'NOT_MAPPED':
+        # Use the original student table name for display if available, else the cleaned one
+        student_table_display = table_data.get('student_table_original_for_query', table_data.get('student_table_cleaned', 'N/A'))
+        
+        has_error = table_data.get('error') is not None
+        status = 'N/A'
+        note = ''
+        data_imported_correctly_text = 'Không' # Default to No
+        import_correctly_text = 'Không'       # Default to No  
+        business_logic_done_text = 'Không'    # Default to No
+        
+        biz_score = summary.get('business_logic_score', 0)
+        biz_max = summary.get('business_logic_max', len(BUSINESS_LOGIC_CHANGES)) # Use actual max
+        business_score_text = f"'{biz_score}/{biz_max}" # Ensure string formatting for Excel
+        
+        if has_error:
             status = 'Lỗi'
-            note = error if error else 'Không tìm thấy bảng tương ứng của sinh viên.'
-        elif data_ok and biz_ok:
-            status = 'Đúng nghiệp vụ'
-            note = 'Dữ liệu và nghiệp vụ đều đúng.'
-        elif data_ok and not is_business_table:
-            status = 'Khớp dữ liệu'
-            note = 'Số dòng khớp chính xác.'
+            note = str(table_data['error'])
         else:
-            if is_business_table:
-                status = 'Sai nghiệp vụ'
-                note = f"Chênh lệch {difference}, dữ liệu hoặc nghiệp vụ sai."
-            else:
-                status = 'Sai lệch dữ liệu'
-                note = f"Chênh lệch {difference} dòng so với đáp án."
+            if is_business:
+                expected_increase = table_data.get('expected_increase', 0)
+                
+                # Logic cho bảng business:
+                # "Đã nhập đúng dữ liệu" = đã import đúng base data (phần 1)
+                # "Đã import đúng" = hoàn thành cả 2 phần (base + business)                # "Đã nhập đúng nghiệp vụ" = đã thực hiện đúng phần 2 (business logic)
+                
+                if difference == 0:
+                    # Exact match: Could mean perfect OR missing business logic
+                    if expected_increase == 0:
+                        # No business logic expected, so this is perfect
+                        data_imported_correctly_text = 'Có'  # Base data correct
+                        import_correctly_text = 'Có'        # Overall correct
+                        business_logic_done_text = 'Có'     # Business logic correct (none expected)
+                        status = 'Hoàn hảo'
+                        note = 'Cả dữ liệu gốc và nghiệp vụ đều chính xác.'
+                    else:
+                        # Business logic expected but not done (exact match means missing business logic)
+                        data_imported_correctly_text = 'Có'  # Base data correct
+                        import_correctly_text = 'Không'     # Overall incomplete
+                        business_logic_done_text = 'Không'  # Business logic not done
+                        status = 'Thiếu nghiệp vụ'
+                        note = f'Đã nhập đúng dữ liệu gốc, chưa thực hiện nghiệp vụ (+{expected_increase}).'
+                        
+                elif difference == -1:
+                    # Special case for -1 difference: This is ALWAYS interpreted as "entered base data correctly,
+                    # missed business logic" regardless of expected_increase
+                    data_imported_correctly_text = 'Có'       # Base data correctly imported
+                    import_correctly_text = 'Không'          # Overall incomplete (missing business logic)
+                    business_logic_done_text = 'Không'       # Business logic not done
+                    status = 'Thiếu nghiệp vụ'
+                    note = f'Đã nhập đúng dữ liệu gốc, thiếu 1 dòng nghiệp vụ.'
+                elif difference == -expected_increase and expected_increase > 1:
+                    # Missing exactly the expected business logic rows (for cases other than -1)
+                    data_imported_correctly_text = 'Có'      # Base data correctly imported
+                    import_correctly_text = 'Không'         # Overall incomplete (missing business logic)
+                    business_logic_done_text = 'Không'      # Business logic not done
+                    status = 'Thiếu nghiệp vụ'
+                    note = f'Đã nhập đúng dữ liệu gốc, thiếu {expected_increase} dòng nghiệp vụ.'
+                elif difference == expected_increase:
+                    # Tăng đúng số dòng expected: business logic đúng
+                    # Cần kiểm tra base data: nếu student_count = answer_count + expected_increase
+                    # thì base data cũng đúng
+                    expected_base_count = answer_count
+                    actual_base_count = student_count - expected_increase
+                    
+                    if actual_base_count == expected_base_count:
+                        data_imported_correctly_text = 'Có'  # Base data đúng
+                        import_correctly_text = 'Có'        # Tổng thể đúng  
+                        business_logic_done_text = 'Có'     # Business logic đúng
+                        status = 'Đúng nghiệp vụ'
+                        note = 'Dữ liệu gốc và nghiệp vụ đều đúng.'
+                    else:
+                        data_imported_correctly_text = 'Không'  # Base data sai
+                        import_correctly_text = 'Không'        # Tổng thể sai
+                        business_logic_done_text = 'Có'       # Business logic đúng nhưng base sai
+                        status = 'Nghiệp vụ đúng, dữ liệu gốc sai'
+                        note = f'Nghiệp vụ đúng (+{expected_increase}), nhưng dữ liệu gốc có vấn đề.'
+                else:                    # Các trường hợp khác
+                    data_imported_correctly_text = 'Không'
+                    import_correctly_text = 'Không'
+                    business_logic_done_text = 'Không' 
+                    status = 'Sai nghiệp vụ'
+                    note = f'Chênh lệch {difference}, kỳ vọng tăng {expected_increase}.'
+                    
+            else: # Regular data table (no business logic expected)
+                # For regular tables, only Part 1 (basic data import) applies
+                # Part 2 (business logic) doesn't affect these tables
+                if student_count == answer_count:
+                    data_imported_correctly_text = 'Có'   # Part 1 done correctly
+                    import_correctly_text = 'Có'         # Overall correct (only Part 1 needed)
+                    business_logic_done_text = 'Không'   # No business logic expected for this table
+                    status = 'Khớp dữ liệu'
+                    note = 'Số dòng khớp chính xác.'
+                elif difference == -1:
+                    # Special case for regular tables with -1 difference
+                    # According to user requirements, this also means "base data correct, business logic missing"
+                    data_imported_correctly_text = 'Có'   # Part 1 done correctly
+                    import_correctly_text = 'Không'      # Overall incomplete
+                    business_logic_done_text = 'Không'   # No business logic for this table
+                    status = 'Thiếu nghiệp vụ'
+                    note = 'Đã nhập đúng dữ liệu gốc, thiếu 1 dòng nghiệp vụ.'
+                else:
+                    data_imported_correctly_text = 'Không' # Part 1 failed
+                    import_correctly_text = 'Không'       # Overall incorrect
+                    business_logic_done_text = 'Không'    # No business logic expected for this table
+                    status = 'Sai lệch dữ liệu' 
+                    note = f'Chênh lệch {difference} dòng so với đáp án.'
+            
+            # Override note if student table was not found or error during count
+            if student_table_display == 'NOT_MAPPED':
+                status = 'Lỗi mapping'
+                note = 'Không tìm thấy bảng tương ứng của sinh viên.'
+            elif student_table_display == 'ERROR_TABLE' or "Could not get student table row count" in note: # Check specific error
+                status = 'Lỗi truy vấn bảng SV'
+                note = f"Không thể truy vấn số dòng bảng SV: {table_data.get('student_table_original_for_query', 'N/A')}. " + (table_data.get('error', ''))
 
         csv_rows.append({
             'MSSV': student_id,
-            'Tên bảng đáp án': answer_table_cleaned,
-            'Tên bảng sinh viên': student_display,
-            'Số dòng đáp án': answer_count if not error else 'Lỗi',
-            'Số dòng sinh viên': student_count if not error else 'Lỗi',
-            'Chênh lệch': difference if not error else 'Lỗi',
-            'Đã nhập đúng dữ liệu': data_text,
-            'Đã nhập đúng nghiệp vụ': biz_text,
-            'Là bảng nghiệp vụ': 'Có' if is_business_table else 'Không',
-            'Điểm nghiệp vụ': f"{summary.get('business_logic_score',0)}/{summary.get('business_logic_max',0)}",
+            'Tên bảng đáp án': answer_table_cleaned, # Use cleaned name from answer schema
+            'Tên bảng sinh viên': student_table_display, # Show original name used for query
+            'Số dòng đáp án': answer_count if not has_error else 'Lỗi',
+            'Số dòng sinh viên': student_count if not has_error else 'Lỗi',
+            'Chênh lệch': difference if not has_error else 'Lỗi',
+            'Đã nhập đúng dữ liệu': data_imported_correctly_text,
+            'Đã import đúng': import_correctly_text,
+            'Đã nhập đúng nghiệp vụ': business_logic_done_text,
+            'Là bảng nghiệp vụ': 'Có' if is_business else 'Không',
+            'Điểm nghiệp vụ': business_score_text, # This is an overall score, repeated per row
             'Trạng thái': status,
             'Ghi chú': note
         })
+        
+    # Add a summary row if needed, or ensure the overall score is clear
+    # For now, the 'Điểm nghiệp vụ' is repeated, which might be fine.
+    
     return csv_rows
+
+# ... (rest of the file)
