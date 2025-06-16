@@ -1,7 +1,6 @@
-<<<<<<< HEAD
 # Database Schema Grading System
 
-A Python package for automated grading of database schemas with support for table/column matching, foreign key analysis, and row count validation.
+A Python package for automated grading of database assignments with support for table/column matching, foreign key analysis, row count validation, view matching, and summary scoring. Now supports Gemini API for semantic matching.
 
 ## Features
 
@@ -9,7 +8,10 @@ A Python package for automated grading of database schemas with support for tabl
 - **Column Matching**: Advanced column matching with semantic similarity analysis
 - **Foreign Key Analysis**: Compare foreign key relationships between schemas
 - **Row Count Validation**: Compare data row counts between answer and student databases
+- **View Matching**: Match views by column/row count and export results
+- **Summary Table**: Aggregate grading results and compute detailed scores (A1, A2, A3, B, C, Tổng điểm)
 - **Gemini API Integration**: Enhanced semantic understanding for better matching accuracy
+- **.env Support**: API keys and secrets loaded automatically from `.env`
 
 ## Installation
 
@@ -20,12 +22,9 @@ pip install -r requirements.txt
 
 2. **Setup configuration:**
 ```bash
-# Interactive setup
-python setup.py
-
-# Or manually create .env file
-cp .env.example .env
-# Edit .env with your configuration
+# Create .env file in project root
+# Example:
+echo GOOGLE_API_KEY=your_gemini_api_key > .env
 ```
 
 3. **Get Gemini API Key (optional but recommended):**
@@ -75,26 +74,37 @@ grading/
 │   ├── schema_grader/          # Core grading package
 │   │   ├── db/                 # Database operations
 │   │   ├── matching/           # Table/column matching logic
-│   │   ├── grading/            # Grading algorithms
+│   │   ├── grading/            # Grading algorithms, summary, view matching
 │   │   ├── foreign_key/        # Foreign key analysis
-│   │   ├── embedding/          # AI/ML embeddings
+│   │   ├── embedding/          # AI/ML embeddings (Gemini, etc.)
 │   │   └── utils/              # Utility functions
 │   └── __init__.py
 ├── tests/                      # Test files
-├── temp/                       # Temporary/cache files
-└── requirements.txt
+├── .env                        # API keys and secrets
+├── requirements.txt
+└── ...
 ```
 
 ## Version History
 
-- **v1.2**: Enhanced matching with Gemini API integration
-- **v1.1**: Foreign key matching improvements  
+- **v1.4.3**: View matching, summary table with detailed points, Gemini embedding refactor, .env auto-load
+- **v1.4**: View matching, summary table, robust pipeline
+- **v1.3.x**: Row count, business logic, and foreign key improvements
+- **v1.2**: Gemini API integration
 - **v1.0**: Initial stable release
+
+## Git Usage
+
+- **Tag a release:**
+  ```bash
+  git tag v1.4.3
+  git push --tags
+  ```
+- **Checkout a release:**
+  ```bash
+  git checkout v1.4.3
+  ```
 
 ## License
 
 MIT License
-=======
-# teaching
-A repository for projects used to facilitate my teaching
->>>>>>> origin/main
