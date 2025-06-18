@@ -5,6 +5,8 @@ from ..config import STAGE_RE
 def _clean_table_name(name: str) -> str:
     # Remove numeric prefixes like "08." or "07. " (with optional space after dot)
     cleaned = re.sub(r'^\d+\.\s*', '', name)
+    # Remove common Vietnamese/English table prefixes (case-insensitive, with optional space/underscore)
+    cleaned = re.sub(r'^(c|dm|tbl|bang|t|b)[ _]*', '', cleaned, flags=re.IGNORECASE)
     # Convert to uppercase for consistency
     return cleaned.upper()
 
